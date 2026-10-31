@@ -63,7 +63,8 @@ jobs:
           rm -f *.zip
 
           cd $GITHUB_WORKSPACE
-          wget -O subconverter_linux64.tar.gz https://github.com/MetaCubeX/subconverter/releases/download/Alpha/subconverter_linux64.tar.gz
+          SUBCONVERTER_URL=$(curl -s https://api.github.com/repos/MetaCubeX/subconverter/releases/latest | grep "browser_download_url.*linux64.tar.gz" | cut -d '"' -f 4)
+          wget -O subconverter_linux64.tar.gz "$SUBCONVERTER_URL"
           tar xvf subconverter_linux64.tar.gz
 
           # upx

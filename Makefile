@@ -125,7 +125,8 @@ download_subconverter:
 	@echo "+ $@"
 	@mkdir -p ./tmp/subconverter
 	@mkdir -p ./tmp/subconverter_tmp
-	@wget -O subconverter_linux64.tar.gz https://github.com/MetaCubeX/subconverter/releases/download/Alpha/subconverter_linux64.tar.gz
+	@SUBCONVERTER_URL=$$(curl -s https://api.github.com/repos/MetaCubeX/subconverter/releases/latest | grep "browser_download_url.*linux64.tar.gz" | cut -d '"' -f 4) && \
+		wget -O subconverter_linux64.tar.gz "$$SUBCONVERTER_URL"
 	@tar xvf subconverter_linux64.tar.gz -C ./tmp/subconverter_tmp/
 	@cp ./tmp/subconverter_tmp/subconverter/subconverter ./tmp/subconverter/
 	@rm -r ./tmp/subconverter_tmp
