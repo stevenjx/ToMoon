@@ -1,0 +1,11 @@
+{
+  "name": "To Moon",
+  "author": "Sayo Kurisu",
+  "flags": ["root"],
+  "api_version": 1,
+  "publish": {
+    "tags": ["root", "network"],
+    "description": "SteamOS Network Tools Box.",
+    "image": "https://opengraph.githubassets.com/1/SteamDeckHomebrew/PluginLoader"
+  }
+}

@@ -1,0 +1,159 @@
+name: ToMoon Auto Build
+
+on:
+  - push
+  - pull_request
+
+permissions:
+  contents: write
+
+jobs:
+  build_plugin:
+    name: Build Plugin
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      #build tomoon start
+      - uses: actions/checkout@v4
+
+      - name: Install Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip upx
+
+      - name: Download Clash and Yacd and Subconverter
+        run: |
+          mkdir tmp && cd tmp
+          mkdir core && cd core
+          # Mihomo (Clash Meta)
+          LATEST_URL=$(curl -s https://api.github.com/repos/MetaCubeX/mihomo/releases/latest | grep "browser_download_url.*linux-amd64-v.*gz\"" | cut -d '"' -f 4)
+          wget -O clash.gz $LATEST_URL
+          gzip -d clash.gz
+
+          # upx
+          chmod +x clash
+          upx clash
+
+          # country.mmdb & geosite.dat
+          wget https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/country.mmdb
+          wget https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat
+          wget -O asn.mmdb https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-ASN.mmdb
+          
+          # dashboard
+          mkdir web
+          # yacd
+          wget -O yacd.zip https://github.com/haishanh/yacd/archive/refs/heads/gh-pages.zip
+          unzip yacd.zip
+          mv yacd-gh-pages web/yacd
+          # yacd-meta
+          wget -O yacd-meta.zip https://github.com/MetaCubeX/yacd/archive/gh-pages.zip
+          unzip yacd-meta.zip
+          mv Yacd-meta-gh-pages web/yacd-meta
+          # metacubexd
+          wget -O metacubexd.zip https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip
+          unzip metacubexd.zip
+          mv metacubexd-gh-pages web/metacubexd
+          # zashboard
+          wget -O zashboard.zip https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip
+          unzip zashboard.zip
+          mv dist web/zashboard
+
+          echo "clean zips"
+          rm -f *.zip
+
+          cd $GITHUB_WORKSPACE
+          wget -O subconverter_linux64.tar.gz https://github.com/MetaCubeX/subconverter/releases/download/Alpha/subconverter_linux64.tar.gz
+          tar xvf subconverter_linux64.tar.gz
+
+          # upx
+          chmod +x subconverter/subconverter
+          upx subconverter/subconverter
+
+      # build front-end start
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Requestment
+        run: |
+          cp -r usdpl src/
+          npm i
+      - name: build front end
+        run: npm run build
+        working-directory: .
+      - name: build external web page
+        run: |
+          npm i
+          npm run build
+        working-directory: tomoon-web
+      # build front-end end
+      # build backend start
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: ClementTsang/cargo-action@v0.0.6
+        with:
+          command: build
+          directory: ./backend
+          args: --target x86_64-unknown-linux-gnu --release
+          use-cross: false
+
+      - name: upx tomoon
+        run: |
+          upx ./backend/target/x86_64-unknown-linux-gnu/release/tomoon
+
+      - name: Collect Files
+        run: |
+          mkdir -p ./release/tomoon/bin/core/web
+          mkdir -p ./release/tomoon/dist
+          cp backend/target/x86_64-unknown-linux-gnu/release/tomoon ./release/tomoon/bin/tomoon
+          cp ./dist/index.js ./release/tomoon/dist/index.js
+          cp main.py ./release/tomoon/main.py
+          cp plugin.json ./release/tomoon/plugin.json
+          cp package.json ./release/tomoon/package.json
+          cp -r ./tmp/core ./release/tomoon/bin/
+          cp -r ./tomoon-web/dist ./release/tomoon/web
+          cp -r ./py_modules ./release/tomoon/py_modules
+          mkdir -p ./release/tomoon/web/rules
+          bash ./assets/subconverter_rules/dl_rules.sh ./release/tomoon/web/rules
+          cp ./assets/subconverter_rules/ACL4SSR_Online.ini ./release/tomoon/web/ACL4SSR_Online.ini
+          cp ./subconverter/subconverter ./release/tomoon/bin/subconverter
+          cd ./release 
+          zip -r tomoon.zip tomoon
+          cd ..
+
+      - name: Publish Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tomoon-artifacts
+          path: ./release/tomoon.zip
+          if-no-files-found: error
+
+
+  publish:
+    name: Publish Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    needs: build_plugin
+    steps:
+      - run: mkdir /tmp/artifacts
+
+      - name: download artifact
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/artifacts
+
+      - run: ls -R /tmp/artifacts
+      - run: |
+          mv /tmp/artifacts/tomoon-artifacts/tomoon.zip /tmp/artifacts/tomoon-artifacts/tomoon-$GITHUB_REF_NAME.zip
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+
+      - name: publish to github release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: /tmp/artifacts/tomoon-artifacts/tomoon*.zip
+          name: Release ${{ github.ref_name }}
+          draft: false
+          generate_release_notes: true
+          prerelease: contains(github.ref, 'pre')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
