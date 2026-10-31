@@ -56,9 +56,9 @@ download_core:
 	@mkdir -p ./tmp
 	@mkdir -p ./tmp/core
 	@echo "Fetching latest release info from GitHub..."
-	@LATEST_URL=$$(curl -s https://api.github.com/repos/MetaCubeX/mihomo/releases/latest | grep "browser_download_url.*linux-amd64-v.*gz\"" | cut -d '"' -f 4) && \
+	@LATEST_URL=$$(curl -s https://api.github.com/repos/MetaCubeX/mihomo/releases/latest | grep "browser_download_url.*linux-amd64-compatible-v.*\.gz\"" | head -n 1 | cut -d '"' -f 4) && \
 	echo "Downloading from: $$LATEST_URL" && \
-		wget -O clash.gz $$LATEST_URL && \
+		wget -O clash.gz "$$LATEST_URL" && \
 		gzip -d clash.gz -c > ./tmp/core/clash && \
 		rm -f clash.gz
 

@@ -1,6 +1,6 @@
 {
   "name": "tomoon",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "SteamOS Network Tools Box.",
   "type": "module",
   "scripts": {

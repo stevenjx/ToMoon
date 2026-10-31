@@ -27,9 +27,13 @@ jobs:
           mkdir tmp && cd tmp
           mkdir core && cd core
           # Mihomo (Clash Meta)
-          LATEST_URL=$(curl -s https://api.github.com/repos/MetaCubeX/mihomo/releases/latest | grep "browser_download_url.*linux-amd64-v.*gz\"" | cut -d '"' -f 4)
-          wget -O clash.gz $LATEST_URL
+          # 注意：mihomo 同时发布 v1/v2/v3 与 go120/go123 多个变体，
+          # 必须只取一个，否则 wget -O 会把多个 gz 拼接进同一个文件
+          LATEST_URL=$(curl -s https://api.github.com/repos/MetaCubeX/mihomo/releases/latest | grep "browser_download_url.*linux-amd64-compatible-v.*\.gz\"" | head -n 1 | cut -d '"' -f 4)
+          test -n "$LATEST_URL"
+          wget -O clash.gz "$LATEST_URL"
           gzip -d clash.gz
+          ls -lh clash
 
           # upx
           chmod +x clash
