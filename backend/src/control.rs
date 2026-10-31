@@ -116,6 +116,7 @@ impl ControlRuntime {
     pub fn run(&self) -> thread::JoinHandle<()> {
         let runtime_settings = self.settings_clone();
         let runtime_state = self.state_clone();
+        let runtime_running_status = self.running_status_clone();
 
         //health check
         //当程序上次异常退出时的处理
@@ -136,46 +137,63 @@ impl ControlRuntime {
         //save config
         thread::spawn(move || {
             let sleep_duration = Duration::from_millis(1000);
+            let mut ticks: u32 = 0;
             loop {
                 //let start_time = Instant::now();
-                {
-                    // save to file
-                    let state = match runtime_state.read() {
-                        Ok(x) => x,
+                // 每次只短暂持锁取快照：原先先持 state 读锁再取 settings 读锁，
+                // 与 set_clash_status 的 settings 写锁 -> state 写锁 顺序相反，会互锁
+                let (dirty, home) = match runtime_state.read() {
+                    Ok(x) => (x.dirty, x.home.clone()),
+                    Err(e) => {
+                        log::error!("runtime failed to acquire state read lock: {}", e);
+                        continue;
+                    }
+                };
+                if dirty {
+                    // save settings to file
+                    let settings_json: Settings = match runtime_settings.read() {
+                        Ok(x) => x.clone().into(),
                         Err(e) => {
-                            log::error!("runtime failed to acquire state read lock: {}", e);
+                            log::error!("runtime failed to acquire settings read lock: {}", e);
                             continue;
                         }
                     };
-                    if state.dirty {
-                        // save settings to file
-                        let settings = match runtime_settings.read() {
-                            Ok(x) => x,
-                            Err(e) => {
-                                log::error!("runtime failed to acquire settings read lock: {}", e);
-                                continue;
-                            }
-                        };
-                        let settings_json: Settings = settings.clone().into();
-                        if let Err(e) = settings_json.save(settings_path(&state.home)) {
-                            log::error!(
-                                "SettingsJson.save({}) error: {}",
-                                settings_path(&state.home).display(),
-                                e
-                            );
+                    if let Err(e) = settings_json.save(settings_path(&home)) {
+                        log::error!("SettingsJson.save({}) error: {}", settings_path(&home).display(), e);
+                    }
+                    match runtime_state.write() {
+                        Ok(mut state) => state.dirty = false,
+                        Err(e) => {
+                            log::error!("runtime failed to acquire state write lock: {}", e);
                         }
-                        //Self::on_set_enable(&settings, &state);
-                        drop(state);
-                        let mut state = match runtime_state.write() {
-                            Ok(x) => x,
-                            Err(e) => {
-                                log::error!("runtime failed to acquire state write lock: {}", e);
-                                continue;
-                            }
-                        };
-                        state.dirty = false;
                     }
                 }
+
+                // 看护：clash 被外部杀掉或崩溃后，残留的 TUN 会让整机无法上网，
+                // 这里每 5 秒检查一次，发现异常就复原网络并关闭开关
+                ticks += 1;
+                if ticks % 5 == 0 {
+                    let enabled = match runtime_settings.read() {
+                        Ok(x) => x.enable,
+                        Err(_) => false,
+                    };
+                    if enabled && !helper::is_clash_running() {
+                        log::error!("clash exited while enabled, restoring system network");
+                        if let Ok(mut settings) = runtime_settings.write() {
+                            settings.enable = false;
+                        }
+                        if let Ok(mut status) = runtime_running_status.write() {
+                            *status = RunningStatus::Failed;
+                        }
+                        if let Err(e) = helper::reset_system_network() {
+                            log::error!("watchdog failed to reset network: {}", e);
+                        }
+                        if let Ok(mut state) = runtime_state.write() {
+                            state.dirty = true;
+                        }
+                    }
+                }
+
                 thread::sleep(sleep_duration);
             }
         })

@@ -30,6 +30,16 @@
 2. 下载完成后，切换回主界面选择订阅并点击启动  
 3. 在桌面模式可通过浏览器 http://127.0.0.1:9090/ui 打开仪表盘  
 
+### 桌面模式控制台
+
+游戏模式的 Decky 面板只在游戏模式下可见。桌面模式下用浏览器打开 **http://127.0.0.1:55556**（手机同一局域网可用 `http://<Deck 的 IP>:55556`），可以：
+
+- 查看代理运行状态，直接开关代理
+- 切换 / 添加订阅（支持粘贴 `ss://` 链接）
+- 一键「复原网络」，处理关闭代理后仍然断网的情况
+
+> 后端带看护线程：clash 进程被外部杀掉或崩溃时，会在 5 秒内自动复原 DNS 与网卡配置并关闭开关，不会再出现残留 TUN 导致整机无法上网。
+
 ## 演示  
 ![Gamming](https://github.com/YukiCoco/StaticFilesCDN/blob/main/deck_gaming.jpg?raw=true)
 ![Dashboard](https://github.com/YukiCoco/StaticFilesCDN/blob/main/deck_dashboard2.jpg?raw=true)

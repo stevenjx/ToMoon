@@ -147,6 +147,19 @@ async fn main() -> Result<(), std::io::Error> {
             .service(
                 web::resource("/set_dashboard").route(web::post().to(external_web::set_dashboard)),
             )
+            // 网页控制台
+            .service(
+                web::resource("/clash_status").route(web::get().to(external_web::get_clash_status)),
+            )
+            .service(
+                web::resource("/set_clash_status")
+                    .route(web::post().to(external_web::set_clash_status)),
+            )
+            .service(web::resource("/sub_list").route(web::get().to(external_web::get_sub_list)))
+            .service(web::resource("/set_sub").route(web::post().to(external_web::set_sub)))
+            .service(
+                web::resource("/reset_network").route(web::post().to(external_web::reset_network)),
+            )
             // web
             .service(
                 fs::Files::new("/", "./web")

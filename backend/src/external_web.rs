@@ -870,3 +870,128 @@ pub async fn get_local_web_address() -> Result<HttpResponse> {
         }
     };
 }
+
+// 以下是给网页控制台用的接口，逻辑直接复用 api 模块，避免两套实现
+
+#[derive(Deserialize)]
+pub struct SetClashStatusParams {
+    enabled: bool,
+}
+
+#[derive(Deserialize)]
+pub struct SetSubParams {
+    path: String,
+}
+
+pub async fn get_clash_status(state: web::Data<AppState>) -> Result<HttpResponse> {
+    let runtime = state.runtime.lock().unwrap();
+    let runtime_settings;
+    unsafe {
+        let runtime = runtime.0.as_ref().unwrap();
+        runtime_settings = runtime.settings_clone();
+    }
+
+    let enabled = match runtime_settings.read() {
+        Ok(x) => x.enable,
+        Err(e) => {
+            log::error!("get_clash_status failed to acquire settings read lock: {}", e);
+            return Err(actix_web::Error::from(ClashError {
+                Message: e.to_string(),
+                ErrorKind: ClashErrorKind::InnerError,
+            }));
+        }
+    };
+
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "status_code": 200,
+        "enabled": enabled,
+        "running": helper::is_clash_running(),
+    })))
+}
+
+pub async fn set_clash_status(
+    state: web::Data<AppState>,
+    params: web::Form<SetClashStatusParams>,
+) -> Result<HttpResponse> {
+    let enabled = params.enabled;
+    let runtime = state.runtime.lock().unwrap();
+    let ok = unsafe {
+        let runtime = runtime.0.as_ref().unwrap();
+        let result = crate::api::set_clash_status(runtime)(vec![enabled.into()]);
+        matches!(
+            result.first(),
+            Some(usdpl_back::core::serdes::Primitive::Bool(true))
+        )
+    };
+
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "status_code": if ok { 200 } else { 500 },
+        "enabled": ok,
+    })))
+}
+
+pub async fn get_sub_list(state: web::Data<AppState>) -> Result<HttpResponse> {
+    let runtime = state.runtime.lock().unwrap();
+    let runtime_settings;
+    unsafe {
+        let runtime = runtime.0.as_ref().unwrap();
+        runtime_settings = runtime.settings_clone();
+    }
+
+    let settings = match runtime_settings.read() {
+        Ok(x) => x,
+        Err(e) => {
+            log::error!("get_sub_list failed to acquire settings read lock: {}", e);
+            return Err(actix_web::Error::from(ClashError {
+                Message: e.to_string(),
+                ErrorKind: ClashErrorKind::InnerError,
+            }));
+        }
+    };
+
+    let subs: Vec<serde_json::Value> = settings
+        .subscriptions
+        .iter()
+        .map(|s| {
+            serde_json::json!({
+                "name": s.path.rsplit('/').next().unwrap_or(&s.path),
+                "path": s.path,
+                "url": s.url,
+            })
+        })
+        .collect();
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "status_code": 200,
+        "current_sub": settings.current_sub,
+        "subs": subs,
+    })))
+}
+
+pub async fn set_sub(
+    state: web::Data<AppState>,
+    params: web::Form<SetSubParams>,
+) -> Result<HttpResponse> {
+    let path = params.path.clone();
+    let runtime = state.runtime.lock().unwrap();
+    unsafe {
+        let runtime = runtime.0.as_ref().unwrap();
+        crate::api::set_sub(runtime)(vec![path.into()]);
+    }
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "status_code": 200,
+        "message": "已切换订阅",
+    })))
+}
+
+pub async fn reset_network() -> Result<HttpResponse> {
+    match helper::reset_system_network() {
+        Ok(_) => Ok(HttpResponse::Ok().json(serde_json::json!({
+            "status_code": 200,
+            "message": "网络已复原",
+        }))),
+        Err(e) => Ok(HttpResponse::Ok().json(serde_json::json!({
+            "status_code": 500,
+            "message": e.to_string(),
+        }))),
+    }
+}

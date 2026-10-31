@@ -362,4 +362,77 @@ mod tests {
         assert!(helper::ss_uri_to_config("ss://abcd@127.0.0.1:8388/?plugin=obfs-local").is_none());
         assert!(helper::ss_uri_to_config("https://example.com/sub").is_none());
     }
+
+    #[actix_web::test]
+    async fn web_console_endpoints() {
+        use crate::external_web::{self, AppState, Runtime};
+        use actix_web::{test, web, App};
+        use std::collections::HashMap;
+        use std::sync::Mutex;
+
+        let runtime = Box::leak(Box::new(control::ControlRuntime::new()));
+        let state = web::Data::new(AppState {
+            link_table: Mutex::new(HashMap::new()),
+            runtime: Mutex::new(Runtime(runtime as *const control::ControlRuntime)),
+        });
+
+        let app = test::init_service(
+            App::new()
+                .app_data(state.clone())
+                .route("/clash_status", web::get().to(external_web::get_clash_status))
+                .route("/sub_list", web::get().to(external_web::get_sub_list))
+                .route("/set_sub", web::post().to(external_web::set_sub))
+                .route("/download_sub", web::post().to(external_web::download_sub)),
+        )
+        .await;
+
+        // 状态接口
+        let body: serde_json::Value = test::read_body_json(
+            test::call_service(
+                &app,
+                test::TestRequest::get().uri("/clash_status").to_request(),
+            )
+            .await,
+        )
+        .await;
+        assert_eq!(body["status_code"], 200);
+        assert_eq!(body["enabled"], false);
+
+        // 通过网页接口添加 ss:// 订阅
+        let req = test::TestRequest::post()
+            .uri("/download_sub")
+            .set_form(&[
+                ("link", "ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpMOUlGMUtGbkNINTNSZ3poMEpVakdC@20.239.223.98:9566/?outline=1"),
+                ("subconv", "false"),
+            ])
+            .to_request();
+        assert!(test::call_service(&app, req).await.status().is_success());
+
+        let body: serde_json::Value = test::read_body_json(
+            test::call_service(&app, test::TestRequest::get().uri("/sub_list").to_request()).await,
+        )
+        .await;
+        let subs = body["subs"].as_array().unwrap();
+        let path = subs
+            .last()
+            .expect("ss subscription should be registered")
+            ["path"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert!(path.contains("20.239.223.98"));
+
+        // 切换订阅
+        let req = test::TestRequest::post()
+            .uri("/set_sub")
+            .set_form(&[("path", path.as_str())])
+            .to_request();
+        assert!(test::call_service(&app, req).await.status().is_success());
+
+        let body: serde_json::Value = test::read_body_json(
+            test::call_service(&app, test::TestRequest::get().uri("/sub_list").to_request()).await,
+        )
+        .await;
+        assert_eq!(body["current_sub"], path);
+    }
 }
