@@ -596,6 +596,129 @@ pub fn get_update_status(runtime: &ControlRuntime) -> impl Fn(Vec<Primitive>) ->
     }
 }
 
+/// 返回节点列表与分组，JSON 字符串。
+/// 只保留分组（type: Selector/URLTest/Fallback/LoadBalance）和有名字的节点，
+/// 过滤掉 DIRECT/REJECT 这类内置项，避免面板里塞一堆无用条目。
+pub fn get_proxy_groups(runtime: &ControlRuntime) -> impl Fn(Vec<Primitive>) -> Vec<Primitive> {
+    let clash = runtime.clash_state_clone();
+    move |_| {
+        let clash = match clash.read() {
+            Ok(x) => x,
+            Err(e) => {
+                log::error!("get_proxy_groups failed to acquire clash read lock: {}", e);
+                return vec![];
+            }
+        };
+        let data = match clash.get_proxies() {
+            Ok(x) => x,
+            Err(e) => {
+                log::error!("get_proxy_groups: {}", e);
+                return vec!["".to_string().into()];
+            }
+        };
+
+        let empty = serde_json::Map::new();
+        let proxies = data
+            .get("proxies")
+            .and_then(|x| x.as_object())
+            .unwrap_or(&empty);
+
+        let mut groups = Vec::new();
+        for (name, proxy) in proxies {
+            let kind = proxy.get("type").and_then(|x| x.as_str()).unwrap_or("");
+            let is_group = matches!(
+                kind,
+                "Selector" | "URLTest" | "Fallback" | "LoadBalance" | "Relay"
+            );
+            if !is_group {
+                continue;
+            }
+            let members: Vec<serde_json::Value> = proxy
+                .get("all")
+                .and_then(|x| x.as_array())
+                .map(|all| {
+                    all.iter()
+                        .filter_map(|m| m.as_str())
+                        .filter(|m| *m != "DIRECT" && *m != "REJECT")
+                        .map(|m| serde_json::Value::String(m.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            groups.push(serde_json::json!({
+                "name": name,
+                "type": kind,
+                "now": proxy.get("now").and_then(|x| x.as_str()).unwrap_or(""),
+                "members": members,
+            }));
+        }
+        groups.sort_by(|a, b| {
+            a["name"]
+                .as_str()
+                .unwrap_or("")
+                .cmp(b["name"].as_str().unwrap_or(""))
+        });
+
+        match serde_json::to_string(&groups) {
+            Ok(x) => vec![x.into()],
+            Err(e) => {
+                log::error!("get_proxy_groups serialize failed: {}", e);
+                vec![]
+            }
+        }
+    }
+}
+
+/// 测试单个节点延迟，返回毫秒；失败返回 -1
+pub fn test_proxy_delay(runtime: &ControlRuntime) -> impl Fn(Vec<Primitive>) -> Vec<Primitive> {
+    let clash = runtime.clash_state_clone();
+    move |params| {
+        let name = match params.get(0) {
+            Some(Primitive::String(x)) => x.clone(),
+            _ => return vec![(-1.0).into()],
+        };
+        let clash = match clash.read() {
+            Ok(x) => x,
+            Err(_) => return vec![(-1.0).into()],
+        };
+        match clash.test_delay(&name) {
+            Ok(delay) => vec![(delay as f64).into()],
+            Err(e) => {
+                log::info!("test_proxy_delay({}) failed: {}", name, e);
+                vec![(-1.0).into()]
+            }
+        }
+    }
+}
+
+/// 在分组内切换节点
+pub fn select_proxy(runtime: &ControlRuntime) -> impl Fn(Vec<Primitive>) -> Vec<Primitive> {
+    let clash = runtime.clash_state_clone();
+    move |params| {
+        let group = match params.get(0) {
+            Some(Primitive::String(x)) => x.clone(),
+            _ => return vec![false.into()],
+        };
+        let name = match params.get(1) {
+            Some(Primitive::String(x)) => x.clone(),
+            _ => return vec![false.into()],
+        };
+        let clash = match clash.read() {
+            Ok(x) => x,
+            Err(_) => return vec![false.into()],
+        };
+        match clash.select_proxy(&group, &name) {
+            Ok(_) => {
+                log::info!("select_proxy: {} -> {}", group, name);
+                vec![true.into()]
+            }
+            Err(e) => {
+                log::error!("select_proxy failed: {}", e);
+                vec![false.into()]
+            }
+        }
+    }
+}
+
 pub fn create_debug_log(runtime: &ControlRuntime) -> impl Fn(Vec<Primitive>) -> Vec<Primitive> {
     //let update_status = runtime.update_status_clone();
     let home = match runtime.state_clone().read() {

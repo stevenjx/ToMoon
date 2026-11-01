@@ -31,5 +31,10 @@
     "REINSTALL_PLUGIN": "重新安装插件",
     "UPDATE_TO": "更新到",
     "INSTALLED_VERSION": "已安装版本",
-    "LATEST_VERSION": "最新版本"
+    "LATEST_VERSION": "最新版本",
+    "NODES": "节点",
+    "SELECT_NODE": "选择节点",
+    "TEST_ALL_DELAY": "批量测速",
+    "TESTING": "测速中 ...",
+    "NO_NODE": "还没有节点，请先粘贴 ss:// 链接或添加订阅。"
 }

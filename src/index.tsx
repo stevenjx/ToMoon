@@ -22,7 +22,7 @@ import { Subscriptions, About, Debug } from "./pages";
 import * as backend from "./backend/backend";
 
 import { ApiCallBackend, PyBackend, EnhancedMode } from "./backend";
-import { ActionButtonItem, VersionComponent } from "./components";
+import { ActionButtonItem, VersionComponent, NodePanel } from "./components";
 import { localizationManager, L } from "./i18n";
 
 let enabledGlobal = false;
@@ -395,6 +395,8 @@ const Content: FC<{}> = ({}) => {
           </ActionButtonItem>
         </PanelSectionRow>
       </PanelSection>
+
+      <NodePanel enabled={clashState} />
 
       <PanelSection title={localizationManager.getString(L.TOOLS)}>
         <PanelSectionRow>

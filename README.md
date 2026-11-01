@@ -40,6 +40,16 @@
 
 > 后端带看护线程：clash 进程被外部杀掉或崩溃时，会在 5 秒内自动复原 DNS 与网卡配置并关闭开关，不会再出现残留 TUN 导致整机无法上网。
 
+### 节点切换与测速
+
+游戏模式的 Decky 面板里新增「节点」区块：
+
+- 列出当前配置里所有代理分组的节点，`●` 标记当前使用中的那个
+- 点一下即切换（写入 mihomo，`store-selected: true` 会记住选择）
+- 「批量测速」会逐个请求延迟，结果显示在每个节点右侧；失败显示 `✕`
+
+切换后无需重启核心，面板会立刻反映新的 `now`。
+
 ## 演示  
 ![Gamming](https://github.com/YukiCoco/StaticFilesCDN/blob/main/deck_gaming.jpg?raw=true)
 ![Dashboard](https://github.com/YukiCoco/StaticFilesCDN/blob/main/deck_dashboard2.jpg?raw=true)

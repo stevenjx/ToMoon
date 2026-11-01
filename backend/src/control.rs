@@ -407,6 +407,119 @@ impl Clash {
         self.config = std::path::PathBuf::from((*path).clone());
     }
 
+    /// 读取 mihomo 的节点列表与分组，供面板展示和测速
+    pub fn get_proxies(&self) -> Result<serde_json::Value, ClashError> {
+        let url = self.api_url("/proxies");
+        let authorize = self.authorization();
+        let mut req = minreq::get(url.clone());
+        if let Some(auth) = authorize {
+            req = req.with_header("Authorization", auth);
+        }
+        let res = match req.send() {
+            Ok(x) => x,
+            Err(e) => {
+                return Err(ClashError {
+                    Message: format!("{}: {}", url, e),
+                    ErrorKind: ClashErrorKind::NetworkError,
+                });
+            }
+        };
+        if res.status_code != 200 {
+            return Err(ClashError {
+                Message: format!("clash returned {}", res.status_code),
+                ErrorKind: ClashErrorKind::InnerError,
+            });
+        }
+        serde_json::from_str(res.as_str().unwrap_or("{}")).map_err(|e| ClashError {
+            Message: e.to_string(),
+            ErrorKind: ClashErrorKind::ConfigFormatError,
+        })
+    }
+
+    /// 对节点发起延迟测试，返回毫秒；超时或失败时 mihomo 返回 400 以上
+    pub fn test_delay(&self, name: &str) -> Result<u64, ClashError> {
+        let url = self.api_url(&format!(
+            "/proxies/{}/delay?timeout=5000&url=http%3A%2F%2Fwww.gstatic.com%2Fgenerate_204",
+            urlencoding::encode(name)
+        ));
+        let mut req = minreq::get(url);
+        if let Some(auth) = self.authorization() {
+            req = req.with_header("Authorization", auth);
+        }
+        let res = match req.send()
+        {
+            Ok(x) => x,
+            Err(e) => {
+                return Err(ClashError {
+                    Message: e.to_string(),
+                    ErrorKind: ClashErrorKind::NetworkError,
+                });
+            }
+        };
+        let body: serde_json::Value =
+            serde_json::from_str(res.as_str().unwrap_or("{}")).unwrap_or_default();
+        match body.get("delay").and_then(|x| x.as_u64()) {
+            Some(delay) if res.status_code == 200 => Ok(delay),
+            _ => Err(ClashError {
+                Message: body
+                    .get("message")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("timeout")
+                    .to_string(),
+                ErrorKind: ClashErrorKind::NetworkError,
+            }),
+        }
+    }
+
+    /// 在分组里选中某个节点
+    pub fn select_proxy(&self, group: &str, name: &str) -> Result<(), ClashError> {
+        let url = self.api_url(&format!("/proxies/{}", urlencoding::encode(group)));
+        let body = json!({ "name": name }).to_string();
+        let mut req = minreq::put(url)
+            .with_header("Content-Type", "application/json")
+            .with_body(body);
+        if let Some(auth) = self.authorization() {
+            req = req.with_header("Authorization", auth);
+        }
+        let res = match req.send()
+        {
+            Ok(x) => x,
+            Err(e) => {
+                return Err(ClashError {
+                    Message: e.to_string(),
+                    ErrorKind: ClashErrorKind::NetworkError,
+                });
+            }
+        };
+        if res.status_code == 204 || res.status_code == 200 {
+            Ok(())
+        } else {
+            Err(ClashError {
+                Message: format!(
+                    "clash returned {}: {}",
+                    res.status_code,
+                    res.as_str().unwrap_or("")
+                ),
+                ErrorKind: ClashErrorKind::InnerError,
+            })
+        }
+    }
+
+    fn api_url(&self, path: &str) -> String {
+        format!("http://127.0.0.1:9090{}", path)
+    }
+
+    /// 配置了 secret 时需要带鉴权头
+    fn authorization(&self) -> Option<String> {
+        let secret = self.get_running_secret().unwrap_or_default();
+        if secret.is_empty() {
+            // 未设置 secret 时不发鉴权头
+            None
+        } else {
+            Some(format!("Bearer {}", secret))
+        }
+    }
+
     pub fn get_running_config(&self) -> std::io::Result<std::path::PathBuf> {
         let decky_data_dir = get_decky_data_dir().unwrap();
         let run_config = decky_data_dir.join("running_config.yaml");

@@ -60,6 +60,9 @@ async fn main() -> Result<(), std::io::Error> {
             .register("update_subs", api::update_subs(&runtime))
             .register("get_update_status", api::get_update_status(&runtime))
             .register("create_debug_log", api::create_debug_log(&runtime))
+            .register("get_proxy_groups", api::get_proxy_groups(&runtime))
+            .register("test_proxy_delay", api::test_proxy_delay(&runtime))
+            .register("select_proxy", api::select_proxy(&runtime))
             .register("get_running_status", api::get_running_status(&runtime))
             .run_blocking()
             .unwrap();

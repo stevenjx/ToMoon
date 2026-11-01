@@ -31,5 +31,10 @@
     "REINSTALL_PLUGIN": "Reinstall Plugin",
     "UPDATE_TO": "Update to",
     "INSTALLED_VERSION": "Installed Version",
-    "LATEST_VERSION": "Latest Version"
+    "LATEST_VERSION": "Latest Version",
+    "NODES": "Nodes",
+    "SELECT_NODE": "Select Node",
+    "TEST_ALL_DELAY": "Test All Delays",
+    "TESTING": "Testing ...",
+    "NO_NODE": "No nodes yet. Paste a ss:// link or add a subscription first."
 }

@@ -87,6 +87,33 @@ export async function getCurrentSub(): Promise<string> {
   return (await call_backend("get_current_sub", []))[0];
 }
 
+export interface ProxyGroup {
+  name: string;
+  type: string;
+  now: string;
+  members: string[];
+}
+
+export async function getProxyGroups(): Promise<ProxyGroup[]> {
+  const raw = (await call_backend("get_proxy_groups", []))[0];
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw.toString());
+  } catch (e) {
+    console.error("parse proxy groups failed", e);
+    return [];
+  }
+}
+
+// 返回毫秒，失败为 -1
+export async function testProxyDelay(name: string): Promise<number> {
+  return (await call_backend("test_proxy_delay", [name]))[0];
+}
+
+export async function selectProxy(group: string, name: string): Promise<boolean> {
+  return (await call_backend("select_proxy", [group, name]))[0];
+}
+
 export class PyBackendData {
   private current_version = "";
   private latest_version = "";

@@ -130,6 +130,11 @@ const I18N_KEYS = [
   "UPDATE_TO",
   "INSTALLED_VERSION",
   "LATEST_VERSION",
+  "NODES",
+  "SELECT_NODE",
+  "TEST_ALL_DELAY",
+  "TESTING",
+  "NO_NODE",
 ] as const;
 
 // 创建常量对象并导出
